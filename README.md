@@ -9,10 +9,9 @@ The S3 Explorer is a web application that lets you browse your AWS S3 buckets di
 
 ---
 live pics
-<img width="1364" height="627" alt="image" src="https://github.com/user-attachments/assets/7ed203e8-d005-4d2c-8845-9ab2bc61d383" />
-<img width="1364" height="627" alt="Screenshot from 2026-06-20 01-30-39" src="https://github.com/user-attachments/assets/8e16939d-169f-484f-a307-67cc46ad19b7" />
+<img width="1364" height="627" alt="Screenshot from 2026-06-20 01-30-52" src="https://github.com/user-attachments/assets/a19983d8-8af3-4cf6-bbc5-821e15b894a3" />
 
-
+<img width="1364" height="627" alt="Screenshot from 2026-06-20 01-30-39" src="https://github.com/user-attachments/assets/5f4e858e-6463-478e-a805-d93ca11246f1" />
 
 ## Architecture
 
@@ -35,7 +34,8 @@ Flask Pod  (private subnet)
 ---
 
 ## Infrastructure (Terraform)
-<img width="920" height="671" alt="s3-extract-project(1)" src="https://github.com/user-attachments/assets/5204f38b-7d65-4172-9d3e-375fa34bb1e6" />
+<img width="641" height="319" alt="WhatsApp Image 2026-06-13 at 2 15 29 PM" src="https://github.com/user-attachments/assets/81164b30-d158-4bdc-8f38-73e1576b383e" />
+
 
 Everything is provisioned with Terraform:
 
