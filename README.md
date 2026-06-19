@@ -34,7 +34,8 @@ Flask Pod  (private subnet)
 ---
 
 ## Infrastructure (Terraform)
-<img width="641" height="319" alt="WhatsApp Image 2026-06-13 at 2 15 29 PM" src="https://github.com/user-attachments/assets/81164b30-d158-4bdc-8f38-73e1576b383e" />
+<img width="920" height="671" alt="s3-extract-project(1)" src="https://github.com/user-attachments/assets/9db8d25a-066a-41f3-afc1-e8c01a5f578e" />
+
 
 
 Everything is provisioned with Terraform:
