@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>S3 Explorer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #21262d;
+      --accent: #f78166; --accent-dim: #3d1f1a;
+      --text: #e6edf3; --muted: #7d8590;
+      --green: #3fb950; --yellow: #d29922; --blue: #58a6ff;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 52px; display: flex; align-items: center;
+      gap: 12px; position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: .08em; }
+    .badge { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); padding: 2px 10px; border-radius: 20px; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); display: inline-block; transition: all .3s; }
+    .dot.loading { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); animation: pulse 1s infinite; }
+    .dot.error   { background: var(--accent);  box-shadow: 0 0 6px var(--accent); }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+    .btn { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; cursor: pointer; transition: all .15s; }
+    .btn:hover { color: var(--text); border-color: var(--muted); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .auto-badge { font-family: var(--mono); font-size: 10px; color: var(--green); background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.3); padding: 2px 8px; border-radius: 20px; }
+    .countdown { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+    .shell { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 52px); }
+
+    aside { background: var(--surface); border-right: 1px solid var(--border); padding: 16px 0; overflow-y: auto; }
+    .side-label { font-size: 10px; font-family: var(--mono); color: var(--muted); letter-spacing: .12em; text-transform: uppercase; padding: 0 16px; margin-bottom: 8px; }
+    .bucket-list { list-style: none; }
+    .bucket-item { display: flex; align-items: center; gap: 8px; padding: 7px 16px; cursor: pointer; font-size: 12px; font-family: var(--mono); color: var(--muted); transition: background .12s, color .12s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bucket-item:hover { background: var(--border); color: var(--text); }
+    .bucket-item.active { background: var(--accent-dim); color: var(--accent); border-left: 2px solid var(--accent); padding-left: 14px; }
+
+    main { display: flex; flex-direction: column; overflow: hidden; }
+
+    .breadcrumb { display: flex; align-items: center; gap: 4px; padding: 10px 24px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; background: var(--surface); flex-wrap: wrap; min-height: 42px; }
+    .crumb { color: var(--muted); cursor: pointer; padding: 2px 5px; border-radius: 4px; transition: all .12s; }
+    .crumb:hover { color: var(--text); background: var(--border); }
+    .crumb.current { color: var(--text); cursor: default; }
+    .crumb.current:hover { background: transparent; }
+    .crumb-sep { color: var(--border); }
+
+    .content { padding: 22px 24px; overflow-y: auto; flex: 1; }
+
+    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 20px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+    .stat-label { font-size: 10px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
+    .stat-value { font-size: 22px; font-family: var(--mono); font-weight: 600; }
+
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .toolbar-title { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; flex: 1; }
+    .search { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-family: var(--mono); font-size: 12px; color: var(--text); outline: none; width: 180px; transition: border-color .15s; }
+    .search:focus { border-color: var(--accent); }
+    .search::placeholder { color: var(--muted); }
+
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: var(--bg); padding: 8px 14px; text-align: left; font-size: 10px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; border-bottom: 1px solid var(--border); }
+    tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr[data-type="folder"]:hover { background: rgba(88,166,255,.06); }
+    tbody tr[data-type="file"]:hover   { background: rgba(247,129,102,.04); }
+    td { padding: 10px 14px; font-size: 12px; font-family: var(--mono); vertical-align: middle; }
+    .td-icon { width: 30px; font-size: 14px; }
+    .td-name { color: var(--text); }
+    .td-name.is-folder { color: var(--blue); }
+    .td-size { color: var(--muted); text-align: right; }
+    .td-date { color: var(--muted); text-align: right; white-space: nowrap; }
+    .td-action { text-align: right; width: 70px; }
+    .open-btn { font-family: var(--mono); font-size: 10px; color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 4px; padding: 2px 8px; cursor: pointer; transition: all .15s; }
+    .open-btn:hover { background: var(--accent); color: white; }
+    .tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; border: 1px solid; font-family: var(--mono); }
+    .tag-folder { color: var(--blue);  border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.1); }
+    .tag-file   { color: var(--muted); border-color: var(--border); }
+
+    .empty { text-align: center; padding: 52px 20px; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+    .empty-icon { font-size: 28px; display: block; margin-bottom: 10px; }
+    .msg-box { margin: 40px auto; max-width: 460px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 28px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+    .msg-box b { color: var(--accent); display: block; margin-bottom: 10px; }
+    .msg-box code { display: block; background: var(--bg); padding: 10px; border-radius: 6px; margin-top: 12px; color: var(--text); font-size: 12px; }
+
+    @keyframes highlight { from{background:rgba(63,185,80,.15)}to{background:transparent} }
+    .new-row { animation: highlight 2s ease-out; }
+    .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="dot" id="dot"></span>
+  <div class="logo">S3 Explorer</div>
+  <div class="badge" id="regionBadge">—</div>
+  <div class="header-right">
+    <span class="auto-badge">auto ⟳</span>
+    <span class="countdown" id="countdown"></span>
+    <button class="btn" id="btnRefresh">⟳ Refresh</button>
+  </div>
+</header>
+
+<div class="shell">
+  <aside>
+    <div class="side-label">Buckets</div>
+    <ul class="bucket-list" id="bucketList">
+      <li class="bucket-item"><span class="spinner"></span>Loading...</li>
+    </ul>
+  </aside>
+  <main>
+    <div class="breadcrumb" id="breadcrumb">
+      <span class="crumb current" data-bucket="" data-prefix="">s3</span>
+    </div>
+    <div class="content" id="content">
+      <div class="msg-box" style="text-align:center">
+        <b>Select a bucket</b>
+        Choose a bucket from the sidebar to explore its contents.
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ── State ─────────────────────────────────────────────────────
+  let currentBucket  = null;
+  let currentPrefix  = '';
+  let previousKeys   = new Set();
+  let countdownVal   = 30;
+  let countdownTimer = null;
+  const POLL         = 30;
+
+  // ── Boot ──────────────────────────────────────────────────────
+  document.getElementById('btnRefresh').addEventListener('click', manualRefresh);
+  loadBuckets();
+
+  // ── Breadcrumb click — event delegation ───────────────────────
+  // Using event delegation everywhere avoids inline onclick issues
+  // with special characters in bucket/prefix names
+  document.getElementById('breadcrumb').addEventListener('click', e => {
+    const crumb = e.target.closest('.crumb');
+    if (!crumb || crumb.classList.contains('current')) return;
+    const bucket = crumb.dataset.bucket;
+    const prefix = crumb.dataset.prefix;
+    if (!bucket) {
+      clearBucket();
+    } else {
+      loadObjects(bucket, prefix);
+    }
+  });
+
+  // ── Load bucket list ──────────────────────────────────────────
+  async function loadBuckets() {
+    setDot('loading');
+    try {
+      const data = await api('/api/buckets');
+      document.getElementById('regionBadge').textContent = 'region: ' + (data.region || '—');
+
+      const ul = document.getElementById('bucketList');
+      if (!data.buckets || !data.buckets.length) {
+        ul.innerHTML = '<li class="bucket-item" style="color:var(--muted)">No buckets found</li>';
+        setDot('ok');
+        return;
+      }
+      ul.innerHTML = '';
+      data.buckets.forEach(name => {
+        const li = document.createElement('li');
+        li.className     = 'bucket-item';
+        li.textContent   = '🪣 ' + name;
+        li.dataset.name  = name;
+        li.addEventListener('click', () => selectBucket(name));
+        ul.appendChild(li);
+      });
+      setDot('ok');
+      startCountdown();
+    } catch(e) {
+      setDot('error');
+      document.getElementById('bucketList').innerHTML =
+        `<li class="bucket-item" style="color:var(--accent)">Error: ${e.message}</li>`;
+    }
+  }
+
+  // ── Select a bucket ───────────────────────────────────────────
+  function selectBucket(name) {
+    currentBucket = name;
+    previousKeys  = new Set();
+    // update sidebar active state
+    document.querySelectorAll('.bucket-item').forEach(el => {
+      el.className = 'bucket-item' + (el.dataset.name === name ? ' active' : '');
+    });
+    loadObjects(name, '');
+  }
+
+  // ── Load objects at prefix ────────────────────────────────────
+  async function loadObjects(bucket, prefix) {
+    currentBucket = bucket;
+    currentPrefix = prefix;
+    setDot('loading');
+    renderBreadcrumb(bucket, prefix);
+    document.getElementById('content').innerHTML =
+      '<div class="empty"><span class="spinner"></span>Loading...</div>';
+
+    try {
+      const data = await api(`/api/objects?bucket=${enc(bucket)}&prefix=${enc(prefix)}`);
+      renderContent(data);
+      setDot('ok');
+    } catch(e) {
+      setDot('error');
+      document.getElementById('content').innerHTML =
+        `<div class="msg-box"><b>⚠ Error</b>${e.message}</div>`;
+    }
+  }
+
+  // ── Render content area ───────────────────────────────────────
+  function renderContent(data) {
+    const folders   = data.folders || [];
+    const files     = data.files   || [];
+    const allItems  = [...folders, ...files];
+    const totalSize = files.reduce((s, f) => s + (f.size || 0), 0);
+
+    // detect new items
+    const bucketKey = data.bucket + '/';
+    const curKeys   = new Set(allItems.map(o => bucketKey + o.path));
+    const newItems  = new Set(
+      allItems
+        .filter(o => previousKeys.size > 0 && !previousKeys.has(bucketKey + o.path))
+        .map(o => o.path)
+    );
+    previousKeys = curKeys;
+
+    document.getElementById('content').innerHTML = `
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Folders</div><div class="stat-value">${folders.length}</div></div>
+        <div class="stat"><div class="stat-label">Files</div><div class="stat-value">${files.length}</div></div>
+        <div class="stat"><div class="stat-label">Total Size</div><div class="stat-value" style="font-size:16px;margin-top:4px">${fmtSize(totalSize)}</div></div>
+      </div>
+      <div class="toolbar">
+        <div class="toolbar-title">Contents</div>
+        <input class="search" id="searchBox" placeholder="filter..." />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th></th><th>Name</th><th>Type</th>
+            <th style="text-align:right">Size</th>
+            <th style="text-align:right">Last Modified</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>`;
+
+    // search filter
+    document.getElementById('searchBox').addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      renderRows(allItems.filter(r => r.name.toLowerCase().includes(q)), newItems);
+    });
+
+    renderRows(allItems, newItems);
+    attachTableEvents();
+  }
+
+  // ── Render table rows ─────────────────────────────────────────
+  function renderRows(rows, newItems) {
+    const tbody = document.getElementById('tbody');
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty"><span class="empty-icon">📭</span>Empty</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(r => {
+      const isFolder = r.type === 'folder';
+      const icon     = isFolder ? '📁' : fileIcon(r.name);
+      const tag      = isFolder
+        ? `<span class="tag tag-folder">folder</span>`
+        : `<span class="tag tag-file">${ext(r.name)}</span>`;
+      const size     = isFolder ? '—' : fmtSize(r.size);
+      const isNew    = newItems && newItems.has(r.path);
+      const newBadge = isNew ? ' <span style="color:var(--green);font-size:10px">NEW</span>' : '';
+
+      // Store path and type as data attributes — no inline JS string escaping needed
+      return `
+        <tr data-type="${isFolder ? 'folder' : 'file'}"
+            data-path="${encAttr(r.path)}"
+            class="${isNew ? 'new-row' : ''}">
+          <td class="td-icon">${icon}</td>
+          <td class="td-name ${isFolder ? 'is-folder' : ''}">${escHtml(r.name)}${newBadge}</td>
+          <td>${tag}</td>
+          <td class="td-size">${size}</td>
+          <td class="td-date">${r.date || '—'}</td>
+          <td class="td-action">
+            ${!isFolder ? `<button class="open-btn" data-open="${encAttr(r.path)}">⬇ Open</button>` : ''}
+          </td>
+        </tr>`;
+    }).join('');
+
+    attachTableEvents();
+  }
+
+  // ── Table event delegation ────────────────────────────────────
+  // One listener on tbody handles ALL row and button clicks
+  // No inline onclick — paths with any special characters work fine
+  function attachTableEvents() {
+    const tbody = document.getElementById('tbody');
+    if (!tbody) return;
+
+    tbody.addEventListener('click', async e => {
+      // open button click
+      const openBtn = e.target.closest('.open-btn');
+      if (openBtn) {
+        e.stopPropagation();
+        await openFile(currentBucket, openBtn.dataset.open);
+        return;
+      }
+
+      // row click
+      const row = e.target.closest('tr[data-type]');
+      if (!row) return;
+
+      const type = row.dataset.type;
+      const path = row.dataset.path;
+
+      if (type === 'folder') {
+        loadObjects(currentBucket, path);   // drill into folder
+      } else {
+        await openFile(currentBucket, path); // open file
+      }
+    });
+  }
+
+  // ── Open file via presigned URL ───────────────────────────────
+  async function openFile(bucket, key) {
+    setDot('loading');
+    try {
+      const data = await api(`/api/presign?bucket=${enc(bucket)}&key=${enc(key)}`);
+      window.open(data.url, '_blank');
+      setDot('ok');
+    } catch(e) {
+      setDot('error');
+      alert('Could not open file:\n' + e.message);
+    }
+  }
+
+  // ── Breadcrumb ────────────────────────────────────────────────
+  function renderBreadcrumb(bucket, prefix) {
+    const parts = prefix ? prefix.split('/').filter(Boolean) : [];
+    let html = `<span class="crumb" data-bucket="" data-prefix="">s3</span>`;
+    html += `<span class="crumb-sep">/</span>`;
+
+    const atRoot = parts.length === 0;
+    html += `<span class="crumb${atRoot ? ' current' : ''}"
+                   data-bucket="${encAttr(bucket)}"
+                   data-prefix="">${escHtml(bucket)}</span>`;
+
+    parts.forEach((part, i) => {
+      const isCurrent = i === parts.length - 1;
+      const path = parts.slice(0, i + 1).join('/') + '/';
+      html += `<span class="crumb-sep">/</span>`;
+      html += `<span class="crumb${isCurrent ? ' current' : ''}"
+                     data-bucket="${encAttr(bucket)}"
+                     data-prefix="${encAttr(path)}">${escHtml(part)}</span>`;
+    });
+
+    document.getElementById('breadcrumb').innerHTML = html;
+  }
+
+  function clearBucket() {
+    currentBucket = null;
+    currentPrefix = '';
+    document.querySelectorAll('.bucket-item').forEach(el => el.className = 'bucket-item');
+    document.getElementById('breadcrumb').innerHTML =
+      '<span class="crumb current" data-bucket="" data-prefix="">s3</span>';
+    document.getElementById('content').innerHTML = `
+      <div class="msg-box" style="text-align:center">
+        <b>Select a bucket</b>Choose a bucket from the sidebar.
+      </div>`;
+  }
+
+  // ── Auto-refresh ──────────────────────────────────────────────
+  function startCountdown() {
+    clearInterval(countdownTimer);
+    countdownVal = POLL;
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
+  function tick() {
+    document.getElementById('countdown').textContent = 'next in ' + countdownVal + 's';
+    if (countdownVal-- <= 0) {
+      clearInterval(countdownTimer);
+      refresh();
+    }
+  }
+
+  async function refresh() {
+    if (currentBucket) await loadObjects(currentBucket, currentPrefix);
+    else await loadBuckets();
+    startCountdown();
+  }
+
+  function manualRefresh() {
+    clearInterval(countdownTimer);
+    refresh();
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function setDot(s) {
+    document.getElementById('dot').className = 'dot' + (s === 'ok' ? '' : ' ' + s);
+  }
+  function enc(s)      { return encodeURIComponent(s || ''); }
+  function encAttr(s)  { return (s || '').replace(/"/g, '&quot;'); }
+  function escHtml(s)  { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function ext(n)      { const p = (n||'').split('.'); return p.length > 1 ? '.' + p[p.length-1].toLowerCase() : 'file'; }
+
+  async function api(url) {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+    return data;
+  }
+
+  function fileIcon(n) {
+    const m = {
+      '.log':'📋','.json':'📄','.yaml':'📄','.yml':'📄','.txt':'📄','.md':'📄',
+      '.png':'🖼️','.jpg':'🖼️','.jpeg':'🖼️','.gif':'🖼️','.svg':'🖼️','.webp':'🖼️',
+      '.js':'⚙️','.css':'🎨','.html':'🌐','.sh':'⚙️','.py':'🐍','.go':'🐹',
+      '.tfstate':'🔧','.zip':'📦','.tar':'📦','.gz':'📦','.csv':'📊','.pdf':'📕',
+      '.mp4':'🎥','.mp3':'🎵','.mov':'🎥'
+    };
+    return m[ext(n)] || '📄';
+  }
+
+  function fmtSize(b) {
+    if (!b && b !== 0) return '—';
+    if (b < 1024)       return b + ' B';
+    if (b < 1048576)    return (b/1024).toFixed(1) + ' KB';
+    if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+    return (b/1073741824).toFixed(2) + ' GB';
+  }
+</script>
+</body>
+</html>
