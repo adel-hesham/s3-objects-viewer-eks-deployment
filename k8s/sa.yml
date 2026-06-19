@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::579920977690:role/my-eks-cluster-pos-s3-role
+  name: s3-lister-sa

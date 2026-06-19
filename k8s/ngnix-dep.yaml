@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      serviceAccountName: s3-lister-sa 
+      containers:
+      - name: nginx
+        image: adelelnimr/s3-fetcher:v4
+        env:
+          - name: REFRESH_INTERVAL
+            value: "10"
+        ports:
+        - containerPort: 80
